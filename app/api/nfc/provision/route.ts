@@ -1,31 +1,14 @@
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { isNfcProvisioningAuthorized } from "@/lib/nfc-provisioning";
 import { prisma } from "@/lib/prisma";
 
 const provisioningSchema = z.object({
   quantity: z.number().int().min(1).max(100).default(1),
   tagType: z.enum(["NTAG213", "NTAG215", "NTAG216"]),
 });
-
-function isAuthorized(request: Request) {
-  const configuredSecret = process.env.NFC_PROVISIONING_SECRET;
-  const providedSecret = request.headers.get("x-provisioning-secret");
-  if (!configuredSecret || !providedSecret) return false;
-
-  const configured = Buffer.from(configuredSecret);
-  const provided = Buffer.from(providedSecret);
-  return (
-    configured.length === provided.length &&
-    timingSafeEqual(configured, provided)
-  );
-}
 
 export async function POST(request: Request) {
   if (!process.env.NFC_PROVISIONING_SECRET) {
@@ -34,12 +17,18 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  if (!isAuthorized(request)) {
+  if (!isNfcProvisioningAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_APP_URL) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    !process.env.NEXT_PUBLIC_APP_URL
+  ) {
     return NextResponse.json(
-      { error: "Set NEXT_PUBLIC_APP_URL before provisioning production NFC cards." },
+      {
+        error:
+          "Set NEXT_PUBLIC_APP_URL before provisioning production NFC cards.",
+      },
       { status: 503 },
     );
   }
@@ -85,12 +74,13 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       cards: cards.map((card) => ({
+        identifier: card.identifier,
         tapUrl: `${baseUrl}/t?identifier=${encodeURIComponent(card.identifier)}`,
         activationCode: card.activationCode,
         tagType: card.tagType,
       })),
       warning:
-        "Write each tapUrl to its NFC tag and securely include its one-time activationCode with the corresponding order.",
+        "Encode and verify each tag before marking its identifier ready for sale. Keep activationCode secure for manual or gift activation; paid checkout links tags automatically.",
     },
     { status: 201 },
   );

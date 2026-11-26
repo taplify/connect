@@ -21,7 +21,9 @@ export async function POST(request: Request) {
   );
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Enter the activation code included with your Taplify NFC card." },
+      {
+        error: "Enter the activation code included with your Taplify NFC card.",
+      },
       { status: 400 },
     );
   }
@@ -53,6 +55,8 @@ export async function POST(request: Request) {
       activationCodeHash,
       ownerId: null,
       activatedAt: null,
+      isReadyForSale: true,
+      order: { is: null },
     },
     select: { id: true },
   });
@@ -69,11 +73,14 @@ export async function POST(request: Request) {
       activationCodeHash,
       ownerId: null,
       activatedAt: null,
+      isReadyForSale: true,
+      order: { is: null },
     },
     data: {
       ownerId: session.user.id,
       cardId: card.id,
       isActive: true,
+      isReadyForSale: false,
       activatedAt: new Date(),
       activationCodeHash: null,
     },

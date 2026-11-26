@@ -76,8 +76,24 @@ export async function PATCH(
     allowed.slug = slug;
   }
 
-  const sections = (body as { sections?: Array<{ type: string; data: unknown }> })
-    .sections;
+  const sections = (
+    body as { sections?: Array<{ type: string; data: unknown }> }
+  ).sections;
+
+  if (allowed.isPublished === false) {
+    const pendingOrders = await prisma.nFCOrder.count({
+      where: { cardId: card.id, status: "PENDING" },
+    });
+    if (pendingOrders > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This card has a pending NFC checkout and cannot be unpublished yet.",
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.digitalBusinessCard.update({
@@ -114,6 +130,19 @@ export async function DELETE(
   const card = await ownedCard(id);
   if (!card) {
     return NextResponse.json({ error: "Card not found" }, { status: 404 });
+  }
+
+  const pendingOrders = await prisma.nFCOrder.count({
+    where: { cardId: card.id, status: "PENDING" },
+  });
+  if (pendingOrders > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "This card has a pending NFC checkout and cannot be deleted yet.",
+      },
+      { status: 409 },
+    );
   }
 
   await prisma.digitalBusinessCard.delete({ where: { id: card.id } });
